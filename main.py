@@ -5,6 +5,7 @@ import os
 from datetime import datetime, timedelta
 import requests
 import threading
+import imutils
 
 # Папка с известными лицами
 directory = 'KnownFaces'
@@ -71,7 +72,7 @@ def show_face_match_percentage(face_distances):
     return match_percentage
 
 # Получение видеопотока с IP-камеры
-video_url = 'http://192.168.1.109:8080/video'
+video_url = 'http://192.168.1.109:5554/video'
 username = ' '  # Замените на свои реальные данные, если требуется аутентификация
 password = ' '  # Замените на свои реальные данные, если требуется аутентификация
 stream = requests.get(video_url, auth=(username, password), verify=False, stream=True)
@@ -85,6 +86,9 @@ def process_frame():
     while True:
         # Считываем кадр из видеопотока
         success, frame = capture.read()
+
+        # Изменяем размер кадра на 1366 x 768
+        frame = imutils.resize(frame, width=1366, height=768)
 
         # Уменьшаем размер кадра для ускорения обработки
         small_frame = cv2.resize(frame, (0, 0), None, 0.25, 0.25)
@@ -129,6 +133,8 @@ def process_frame():
             cv2.putText(frame, f"Совпадение: {match_percentage}%", (left + 6, top - 6), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 255, 255), 2)
 
         # Отображаем кадр в окне
+        cv2.namedWindow("WebCam", cv2.WINDOW_NORMAL)
+        cv2.resizeWindow("WebCam", 1366, 768)
         cv2.imshow("WebCam", frame)
 
         # Если нажата клавиша 'q', выходим из цикла
