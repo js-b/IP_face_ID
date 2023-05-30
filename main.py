@@ -71,7 +71,7 @@ def show_face_match_percentage(face_distances):
     return match_percentage
 
 # Получение видеопотока с IP-камеры
-video_url = 'https://192.168.1.109:8080/video'
+video_url = 'httpq://192.168.1.109:8080/video'
 username = ' '  # Замените на свои реальные данные, если требуется аутентификация
 password = ' '  # Замените на свои реальные данные, если требуется аутентификация
 stream = requests.get(video_url, auth=(username, password), verify=False, stream=True)
