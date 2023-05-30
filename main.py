@@ -4,7 +4,7 @@ import cv2
 import os
 from datetime import datetime, timedelta
 import requests
-import urllib
+import threading
 
 # Папка с известными лицами
 directory = 'KnownFaces'
@@ -80,58 +80,67 @@ stream = requests.get(video_url, auth=(username, password), verify=False, stream
 capture = cv2.VideoCapture()
 capture.open(video_url)
 
-while True:
-    # Считываем кадр из видеопотока
-    success, frame = capture.read()
+# Функция для обработки каждого кадра в отдельном потоке
+def process_frame():
+    while True:
+        # Считываем кадр из видеопотока
+        success, frame = capture.read()
 
-    # Уменьшаем размер кадра для ускорения обработки
-    small_frame = cv2.resize(frame, (0, 0), None, 0.25, 0.25)
-    small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
+        # Уменьшаем размер кадра для ускорения обработки
+        small_frame = cv2.resize(frame, (0, 0), None, 0.25, 0.25)
+        small_frame = cv2.cvtColor(small_frame, cv2.COLOR_BGR2RGB)
 
-    # Находим расположение лиц и кодируем их в текущем кадре
-    face_locations_current_frame = face_recognition.face_locations(small_frame)
-    face_encodings_current_frame = face_recognition.face_encodings(small_frame, face_locations_current_frame)
+        # Находим расположение лиц и кодируем их в текущем кадре
+        face_locations_current_frame = face_recognition.face_locations(small_frame)
+        face_encodings_current_frame = face_recognition.face_encodings(small_frame, face_locations_current_frame)
 
-    # Проверяем каждое лицо в текущем кадре
-    for face_encoding, face_location in zip(face_encodings_current_frame, face_locations_current_frame):
-        matches = face_recognition.compare_faces(face_encodings_known, face_encoding)
-        face_distances = face_recognition.face_distance(face_encodings_known, face_encoding)
-        match_index = np.argmin(face_distances)
+        # Проверяем каждое лицо в текущем кадре
+        for face_encoding, face_location in zip(face_encodings_current_frame, face_locations_current_frame):
+            matches = face_recognition.compare_faces(face_encodings_known, face_encoding)
+            face_distances = face_recognition.face_distance(face_encodings_known, face_encoding)
+            match_index = np.argmin(face_distances)
 
-        # Выводим процент совпадения лица
-        match_percentage = show_face_match_percentage(face_distances)
+            # Выводим процент совпадения лица
+            match_percentage = show_face_match_percentage(face_distances)
 
-        # Если найдено совпадение и процент совпадения больше 60
-        if matches[match_index] and match_percentage > 60:
-            name = face_names[match_index]
-            top, right, bottom, left = [coordinate * 4 for coordinate in face_location]
-            cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
-            cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 255, 0), cv2.FILLED)
-            cv2.putText(frame, name, (left + 6, bottom - 6), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 255, 255), 2)
-
-            # Проверяем время последней отметки
-            if check_last_attendance(name):
+            # Если найдено совпадение и процент совпадения больше 60
+            if matches[match_index] and match_percentage > 60:
+                name = face_names[match_index]
                 top, right, bottom, left = [coordinate * 4 for coordinate in face_location]
                 cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
                 cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 255, 0), cv2.FILLED)
                 cv2.putText(frame, name, (left + 6, bottom - 6), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 255, 255), 2)
-                mark_attendance(name)
-        else:
-            # Рисуем прямоугольник вокруг неизвестного лица и добавляем надпись "Не опознан"
-            top, right, bottom, left = [coordinate * 4 for coordinate in face_location]
-            cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
-            cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)
-            cv2.putText(frame, "Не опознан", (left + 6, bottom - 6), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 255, 255), 2)
 
-        # Выводим процент совпадения лица
-        cv2.putText(frame, f"Совпадение: {match_percentage}%", (left + 6, top - 6), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 255, 255), 2)
+                # Проверяем время последней отметки
+                if check_last_attendance(name):
+                    top, right, bottom, left = [coordinate * 4 for coordinate in face_location]
+                    cv2.rectangle(frame, (left, top), (right, bottom), (0, 255, 0), 2)
+                    cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 255, 0), cv2.FILLED)
+                    cv2.putText(frame, name, (left + 6, bottom - 6), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 255, 255), 2)
+                    mark_attendance(name)
+            else:
+                # Рисуем прямоугольник вокруг неизвестного лица и добавляем надпись "Не опознан"
+                top, right, bottom, left = [coordinate * 4 for coordinate in face_location]
+                cv2.rectangle(frame, (left, top), (right, bottom), (0, 0, 255), 2)
+                cv2.rectangle(frame, (left, bottom - 35), (right, bottom), (0, 0, 255), cv2.FILLED)
+                cv2.putText(frame, "Не опознан", (left + 6, bottom - 6), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 255, 255), 2)
 
-    # Отображаем кадр в окне
-    cv2.imshow("WebCam", frame)
+            # Выводим процент совпадения лица
+            cv2.putText(frame, f"Совпадение: {match_percentage}%", (left + 6, top - 6), cv2.FONT_HERSHEY_COMPLEX, 1, (255, 255, 255), 2)
 
-    # Если нажата клавиша 'q', выходим из цикла
-    if cv2.waitKey(1) == ord('q'):
-        break
+        # Отображаем кадр в окне
+        cv2.imshow("WebCam", frame)
+
+        # Если нажата клавиша 'q', выходим из цикла
+        if cv2.waitKey(1) == ord('q'):
+            break
+
+# Запускаем функцию обработки кадра в отдельном потоке
+frame_thread = threading.Thread(target=process_frame)
+frame_thread.start()
+
+# Ожидаем завершения работы потока
+frame_thread.join()
 
 # Освобождаем ресурсы и закрываем окна
 capture.release()
